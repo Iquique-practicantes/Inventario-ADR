@@ -1936,7 +1936,6 @@ class Edit_NotebooksView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
 
 
 
-
 # -------- VISTAS DE MINI PC --------
 
 @add_group_name_to_context
@@ -2425,31 +2424,24 @@ class Edit_ProyectorView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
 
 @add_group_name_to_context
 class BodegaADRView(LoginRequiredMixin, ListView):
-    """Vista para listar todos los equipos en Bodega ADR"""
     model = BodegaADR
     template_name = 'modulos/bodega_adr.html'
     context_object_name = 'bodegas_adr'
     paginate_by = 25
     ordering = ['activo', '-fecha_creacion']
 
-
     def get_queryset(self):
-        """Obtiene y filtra la lista según búsqueda"""
-        queryset = super().get_queryset()
+        qs = super().get_queryset()
         search_query = self.request.GET.get('search', '').strip()
         search_by_pk = self.request.GET.get('search_by_pk', 'false').lower() == 'true'
 
-        # Manejo de búsqueda por pk
         if search_by_pk:
-            if search_query.isdigit():  # Validar si es un número
-                return queryset.filter(pk=int(search_query))
-            else:
-                # Si no es un número, no se realiza búsqueda por pk
-                return queryset.none()
-       
+            if search_query.isdigit():
+                return qs.filter(pk=int(search_query))
+            return qs.none()
+
         if search_query:
-            queryset = queryset.filter(
-                
+            qs = qs.filter(
                 Q(ubicacion__icontains=search_query) |
                 Q(activo__icontains=search_query) |
                 Q(marca__icontains=search_query) |
@@ -2462,13 +2454,12 @@ class BodegaADRView(LoginRequiredMixin, ListView):
                 Q(creado_por__last_name__icontains=search_query) |
                 Q(fecha_creacion__icontains=search_query)
             )
-       
-        return queryset.select_related('creado_por').order_by('activo', '-fecha_creacion')
+        return qs.select_related('creado_por').order_by('activo', '-fecha_creacion')
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['search_query'] = self.request.GET.get('search', '').strip()
-        return context
+        ctx = super().get_context_data(**kwargs)
+        ctx['search_query'] = self.request.GET.get('search', '').strip()
+        return ctx
 
 # -------- CONTINUACIÓN DE VISTAS DE BODEGA ADR --------
 
@@ -3745,42 +3736,50 @@ class AllInOneAdminDetailView(DetailView):
 @add_group_name_to_context
 class NotebookDetailView(DetailView):
     model = Notebook
-    template_name = 'modulos/notebooks.html'
+    template_name = 'modulos/detalle_notebook.html' 
     context_object_name = 'notebook'
-
 @add_group_name_to_context
+
 class MiniPCDetailView(LoginRequiredMixin, DetailView):
     model = MiniPC
-    template_name = 'modulos/detalle_mini_pc.html'
-    context_object_name = 'minipc'
+    template_name = "modulos/detalle_mini_pc.html"
+    context_object_name = "minipc"
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        minipc_instance = self.get_object()
-        minipc_content_type = ContentType.objects.get_for_model(MiniPC)
-        historial_cambios = HistorialCambios.objects.filter(
-            content_type=minipc_content_type,
-            objeto_id=minipc_instance.pk
-        ).order_by('-fecha_cambio') # Ordenar por fecha descendente
-        context['historial_cambios'] = historial_cambios
-        return context
+        ctx = super().get_context_data(**kwargs)
 
+        # Bandera para mostrar/ocultar botón Editar según grupo
+        g = self.request.user.groups.first()
+        ctx["can_edit"] = bool(
+            self.request.user.is_authenticated
+            and g
+            and g.name in ("ADR", "Operadores ADR", "Operador ADR")
+        )
+
+        # Historial: tu tabla NO tiene content_type, filtramos por modelo + objeto_id
+        ctx["historial_cambios"] = (
+            HistorialCambios.objects
+            .filter(modelo__iexact=self.model.__name__, objeto_id=self.object.pk)
+            .select_related("usuario")
+            .order_by("-fecha_modificacion")
+        )
+        return ctx
 @add_group_name_to_context
-class ProyectorDetailView(DetailView):
-    model = Proyectores
-    template_name = 'modulos/proyectores.html'
+class ProyectorDetailView(LoginRequiredMixin, DetailView):
+    model = Proyectores             # <-- si tu clase es Proyectores, cámbiala aquí
+    template_name = 'modulos/detalle_proyector.html'
     context_object_name = 'proyector'
 
 @add_group_name_to_context
 class BodegaADRDetailView(DetailView):
     model = BodegaADR
-    template_name = 'modulos/bodega_adr.html'
+    template_name = "modulos/detalle_bodegaadr.html"
     context_object_name = 'bodegaadr'
 
 @add_group_name_to_context
 class AzoteaDetailView(DetailView):
     model = Azotea
-    template_name = 'modulos/azotea_adr.html'
+    template_name = 'modulos/detalle_azotea.html'
     context_object_name = 'azotea'
 
 
